@@ -1,0 +1,24 @@
+# 依赖与产物
+node_modules/
+dist/
+
+# 本地/私有内容：dify-config.json 含真实 Dify API Key，绝不入库
+# （仓库里用 dify-config.example.json 做模板）
+dify-config.json
+raw/
+_backup_orig/
+data/
+
+# 大文件与下载残留
+video*
+*.part
+*.ytdl
+
+# 日志
+debug.log
+*.log
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store

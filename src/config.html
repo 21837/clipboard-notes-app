@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>配置 Dify</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #f0f2f5; }
+        .wrap { padding: 24px 28px; }
+        h2 { font-size: 18px; color: #111827; margin-bottom: 4px; }
+        .sub { font-size: 12px; color: #6b7280; margin-bottom: 18px; }
+        label { display: block; font-size: 13px; color: #374151; margin: 14px 0 5px; font-weight: 500; }
+        input { width: 100%; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; outline: none; }
+        input:focus { border-color: #6366f1; }
+        .hint { font-size: 11px; color: #9ca3af; margin-top: 4px; line-height: 1.5; }
+        .btn { width: 100%; margin-top: 20px; padding: 11px; border: none; border-radius: 6px; background: #6366f1; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .btn:hover { background: #4f46e5; }
+        .status { margin-top: 12px; font-size: 13px; color: #b8860b; min-height: 18px; text-align: center; }
+        .status.ok { color: #059669; }
+        .status.err { color: #d64545; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h2>配置 Dify 知识库</h2>
+        <div class="sub">需要先配置 Dify 数据集 API 才能使用知识库检索（RAG）</div>
+
+        <label>Dify 服务地址</label>
+        <input id="cfgBaseUrl" placeholder="http://localhost/v1" />
+        <div class="hint">本地部署一般就是 <code>http://localhost/v1</code></div>
+
+        <label>知识库 ID（datasetId）</label>
+        <input id="cfgDatasetId" placeholder="数据集 / 知识库 ID（UUID）" />
+        <div class="hint">Dify 控制台 → 知识 → 点开库 → 地址栏 /datasets/{id} 中间那串</div>
+
+        <label>数据集 API 密钥（apiKey）</label>
+        <input id="cfgApiKey" type="password" placeholder="dataset-xxxxxxxx" />
+        <div class="hint">Dify 控制台 → 知识 → API 访问 → 创建「数据集」密钥（dataset- 开头）</div>
+
+        <label>Top-K（召回条数）</label>
+        <input id="cfgTopK" type="number" value="4" min="1" max="20" />
+
+        <button class="btn" id="saveBtn">保存并启动</button>
+        <div class="status" id="status"></div>
+    </div>
+    <script src="config.js"></script>
+</body>
+</html>

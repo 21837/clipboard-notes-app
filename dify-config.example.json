@@ -1,0 +1,9 @@
+{
+  "baseUrl": "http://localhost/v1",
+  "datasetId": "你的知识库ID（Dify 控制台 → 知识 → 点开库 → 地址栏 /datasets/{id}）",
+  "apiKey": "你的数据集API密钥（Dify 控制台 → 知识 → API 访问 → 创建 dataset- 开头的密钥）",
+  "topK": 4,
+  "rerankingEnable": true,
+  "scoreThresholdEnabled": false,
+  "scoreThreshold": 0
+}
