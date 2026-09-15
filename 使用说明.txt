@@ -1,22 +1,22 @@
-# 功能笔记应用 - Electron 桌面应用
+# 功能笔记 — Electron 桌面应用
 
 ## 📋 项目说明
 
-这是一个基于 Electron 开发的桌面应用程序，具备以下功能：
-- 实时监测系统剪切板
-- 历史记录管理
-- 笔记编辑与保存
-- 系统托盘驻留
-- 全局快捷键
+基于 Electron 的桌面笔记工具，核心是「**剪切板监测 + Dify RAG 知识库检索**」。
+
+- 实时监测系统剪切板（文本 + 截图）
+- 双栏管理：左「未保存剪切板」/ 右「已保存笔记」
+- 笔记保存、导出
+- 系统托盘驻留 + 全局快捷键
+- **接入 Dify 知识库**：复制的内容自动入库（切分 + 向量化），底部输入框用自然语言检索
 
 ## 🚀 快速开始
 
 ### 1. 安装依赖
 
-打开终端，进入项目目录，运行：
+在项目目录（本文件所在目录）运行：
 
 ```bash
-cd C:\Users\21837\Desktop\.trae\clipboard-notes-app
 npm install
 ```
 
@@ -26,44 +26,61 @@ npm install
 npm run dev
 ```
 
-应用将启动并显示主窗口。
-
-### 3. 打包生成 exe 文件
+### 3. 打包生成 exe
 
 ```bash
 npm run build:win
 ```
 
-打包完成后，exe 文件位于 `dist/` 目录。
+产物位于 `dist/` 目录（NSIS 安装包 + `win-unpacked` 免安装版）。
+
+### 4. 配置 Dify（使用 RAG 检索前必做）
+
+1. 复制 `dify-config.example.json` 为 `dify-config.json`
+2. 填入两个值：
+   - `datasetId`：Dify 控制台 → 知识 → 点开知识库 → 看地址栏 `/datasets/{id}` 中间那段
+   - `apiKey`：Dify 控制台 → 知识 → API 访问 → 创建「**数据集**」密钥（`dataset-` 开头）
+3. 也可以直接启动应用：**配置缺失时会自动弹出配置窗**；之后可右键托盘图标 →「配置 Dify 知识库...」随时修改
+
+> ⚠️ `dify-config.json` 已写进 `.gitignore`，**不会被提交**（里面是密钥）。
+> `baseUrl` 默认 `http://localhost/v1`（本地 Dify），云端部署请改成你的地址。
 
 ## 📁 项目结构
 
 ```
 clipboard-notes-app/
-├── main.js              # Electron 主进程（窗口管理、托盘、剪切板监测）
-├── preload.js           # 预加载脚本（安全桥接）
+├── main.js                    # Electron 主进程（窗口 / 托盘 / 剪切板监测 / Dify IPC）
+├── preload.js                 # 预加载脚本（contextBridge 安全桥接）
+├── dify.js                    # Dify 知识库客户端（入库 + 检索）
+├── dify-config.example.json   # Dify 配置模板
 ├── src/
-│   ├── index.html       # 主页面
-│   └── renderer.js      # 渲染进程逻辑
-├── assets/              # 图标资源
-├── package.json         # 项目配置
-└── README.md            # 说明文档
+│   ├── index.html             # 主页面（双栏 + RAG 检索栏）
+│   ├── renderer.js            # 渲染进程逻辑
+│   ├── config.html            # Dify 配置窗口
+│   └── config.js              # 配置窗口逻辑
+├── assets/icon.png            # 应用图标（256×256）
+├── generate-icon.js           # 图标生成脚本
+└── package.json
 ```
 
 ## 🎯 核心功能
 
 ### 剪切板监测
 - 后台每 500ms 检测一次剪切板变化
-- 自动捕获并保存复制内容
-- 去重处理，相同内容移到最前面
+- 自动捕获文本与截图（截图保存到系统「图片/功能笔记截图」）
+- **按内容指纹（MD5）去重**，同一内容不会重复入历史
+
+### Dify RAG 检索
+- 复制的内容自动调用 Dify 知识库 API 入库（**切分与向量化由 Dify 完成**）
+- 底部检索栏：输入问题 → 混合检索 + Rerank → 展示命中的分块、得分与来源
 
 ### 数据持久化
-- 使用 electron-store 保存数据
-- 历史记录和笔记内容自动保存
-- 窗口位置和大小记忆
+- 使用 electron-store，数据存放在系统 **userData** 目录（不写入程序目录，兼容打包后的只读 asar）
+- 记忆窗口位置与大小
+- 存储文件损坏时**自动备份并重建**，不会启动即崩
 
 ### 系统托盘
-- 右键菜单：显示/隐藏窗口、开机启动、退出
+- 右键菜单：显示窗口 / **配置 Dify 知识库...** / 开机启动 / 退出
 - 双击托盘图标显示窗口
 - 后台运行，不占用任务栏
 
@@ -72,17 +89,11 @@ clipboard-notes-app/
 
 ## ⚠️ 图标说明
 
-应用需要一个图标文件 `assets/icon.ico`。如果打包时缺少图标，可以：
-1. 使用在线工具生成 .ico 文件
-2. 从网上下载一个图标
-3. 或者我可以帮你生成一个简单的图标
+`assets/icon.png` 为 256×256 PNG，electron-builder 打包时会据此自动生成 Windows 的 `.ico`。
+需要重新生成时运行：
 
----
+```bash
+node generate-icon.js
+```
 
-## 📝 后续步骤
-
-1. **安装依赖**：运行 `npm install`
-2. **运行测试**：运行 `npm run dev`
-3. **打包发布**：运行 `npm run build:win`
-
-需要我帮你生成图标文件吗？或者有其他问题吗？
+（依赖 `canvas`，已列在 devDependencies。）
