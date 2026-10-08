@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:;">
+    <title>屏幕字幕识别</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, 'Microsoft YaHei', sans-serif; background: #f0f2f5;
+               height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #fff;
+               border-bottom: 1px solid #e9ecef; flex-shrink: 0; flex-wrap: wrap; }
+        button { padding: 7px 13px; border: none; border-radius: 6px; font-size: 13px;
+                 font-weight: 500; cursor: pointer; font-family: inherit; }
+        button:disabled { opacity: .45; cursor: not-allowed; }
+        .blue { background: #1565c0; color: #fff; }
+        .green { background: #2e7d32; color: #fff; }
+        .red { background: #c62828; color: #fff; }
+        .purple { background: #6a1b9a; color: #fff; }
+        .gray { background: #607d8b; color: #fff; }
+        .light { background: #e3e7ee; color: #333; }
+        input[type=number] { width: 62px; padding: 5px 6px; border: 1px solid #cfd6e0;
+                             border-radius: 5px; font-size: 13px; font-family: inherit; }
+        label { font-size: 13px; color: #444; }
+        .status { font-size: 13px; color: #555; margin-left: auto; }
+        .hint { font-size: 12px; color: #888; padding: 4px 10px; background: #fff; flex-shrink: 0; }
+        .preview { background: #fff; padding: 6px 10px 8px; border-bottom: 1px solid #e9ecef; flex-shrink: 0; }
+        .preview img { max-width: 100%; max-height: 120px; display: block; border-radius: 4px; }
+        .preview .ph { color: #aaa; font-size: 12px; padding: 14px 0; text-align: center; }
+        .body { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 8px 10px; }
+        textarea { flex: 1; width: 100%; border: 1px solid #e0e4ea; border-radius: 6px;
+                   padding: 9px 11px; font-size: 14px; line-height: 1.65; resize: none;
+                   font-family: inherit; outline: none; }
+        textarea:focus { border-color: #6366f1; }
+    </style>
+</head>
+<body>
+    <div class="row">
+        <span id="regionText" style="font-size:13px;color:#444">识别区域：加载中...</span>
+        <button class="blue" id="autoBtn">⚡ 自动预选区域</button>
+        <button class="light" id="pickBtn">框选区域</button>
+        <button class="light" id="onceBtn">测试一下</button>
+    </div>
+
+    <div class="row">
+        <button class="green" id="startBtn">▶ 开始识别</button>
+        <button class="red" id="stopBtn" disabled>■ 停止</button>
+        <label>置信度</label><input type="number" id="conf" value="0.01" step="0.01" min="0" max="0.9">
+        <label>间隔</label><input type="number" id="gap" value="0.3" step="0.1" min="0.1" max="3">
+        <span class="status" id="status">就绪</span>
+    </div>
+
+    <div class="hint">用法：把视频暂停在「有字幕」那一帧 → 点「⚡自动预选区域」或「框选区域」→「开始识别」→ 播视频 → 完了点「停止」</div>
+
+    <div class="preview" id="previewBox">
+        <div class="ph">工具看到的画面（区域预览）</div>
+    </div>
+
+    <div class="body">
+        <textarea id="result" placeholder="识别结果会一行行出现在这里（可直接编辑）"></textarea>
+    </div>
+
+    <div class="row" style="border-top:1px solid #e9ecef;border-bottom:none">
+        <button class="purple" id="fixBtn">🪄 智能纠错</button>
+        <button class="light" id="copyBtn">复制到剪贴板</button>
+        <button class="light" id="kbBtn">存入知识库</button>
+        <button class="light" id="saveBtn">另存为...</button>
+        <button class="light" id="clearBtn" style="margin-left:auto">清空</button>
+    </div>
+
+    <script src="subtitle.js"></script>
+</body>
+</html>

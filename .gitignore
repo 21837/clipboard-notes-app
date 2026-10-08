@@ -22,3 +22,11 @@ debug.log
 .vscode/
 .idea/
 .DS_Store
+
+# Python 侧本地配置（含 key，不入库）
+py/llm-config.json
+py/screen_region.txt
+
+# Python 缓存
+__pycache__/
+*.pyc

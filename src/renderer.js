@@ -295,6 +295,11 @@ try {
         ragBtn.addEventListener('click', searchKnowledge);
         ragInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') searchKnowledge(); });
     }
+    // 打开「屏幕字幕识别」窗口（看视频自动出文案）
+    const subtitleBtn = document.getElementById('subtitleBtn');
+    if (subtitleBtn && window.electronAPI && window.electronAPI.openSubtitleWindow) {
+        subtitleBtn.addEventListener('click', () => window.electronAPI.openSubtitleWindow());
+    }
     if (ragResults && typeof window.electronAPI.getDifyStatus === 'function') {
         window.electronAPI.getDifyStatus().then(s => {
             if (!s.configured) {

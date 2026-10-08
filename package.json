@@ -29,6 +29,11 @@
   "build": {
     "appId": "com.clipboard.notes.app",
     "productName": "功能笔记",
+    "compression": "maximum",
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
     "directories": {
       "output": "dist"
     },
@@ -38,7 +43,11 @@
       "dify.js",
       "dify-config.json",
       "src/**/*",
+      "py/**/*",
       "assets/**/*"
+    ],
+    "asarUnpack": [
+      "py/**/*"
     ],
     "extraResources": [
       "assets/icon.png"

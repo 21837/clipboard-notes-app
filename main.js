@@ -5,6 +5,157 @@ const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const Store = require('electron-store');
 const dify = require('./dify'); // Dify RAG 集成
+const { spawn } = require('child_process'); // 字幕识别（Python 子进程）
+
+// ─── 字幕识别服务：Python 子进程 + NDJSON 协议 ───
+let pyProc = null;
+let pyBuf = '';
+let subtitleWindow = null;
+
+// 打包后 __dirname 在只读的 app.asar 里，外部 python 进程读不到 asar 内的文件（ENOTDIR）；
+// asarUnpack 会把 py/ 解包到 app.asar.unpacked/，这里指向解包后的真实路径（开发时路径不变）
+function pyDir() {
+    return path.join(__dirname, 'py').replace('app.asar', 'app.asar.unpacked');
+}
+
+function pyScript() {
+    return path.join(pyDir(), 'screen_ocr_service.py');
+}
+
+// 检测本机 Python 及字幕功能所需依赖。
+// 安装包【不包含】Python 与 Pillow/opencv/numpy/pyperclip/paddleocr(或 easyocr)，
+// 因此运行前先探测；缺依赖时给出明确提示，而不是静默失败。
+function checkPyDeps() {
+    return new Promise((resolve) => {
+        const probe = "import importlib.util as u; "
+            + "miss=[m for m in ['PIL','cv2','numpy','pyperclip'] if u.find_spec(m) is None]; "
+            + "ocr=any(u.find_spec(x) is not None for x in ['paddleocr','easyocr']); "
+            + "print('MISS='+','.join(miss)); print('OCR='+('1' if ocr else '0'))";
+        let child;
+        try {
+            child = spawn('python', ['-c', probe], {
+                windowsHide: true,
+                env: Object.assign({}, process.env, { PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' }),
+            });
+        } catch (e) {
+            return resolve({ pythonMissing: true, missing: [], ocrMissing: true });
+        }
+        let out = '';
+        let settled = false;
+        const finish = (r) => { if (!settled) { settled = true; resolve(r); } };
+        child.stdout.on('data', (d) => { out += String(d); });
+        child.on('error', () => finish({ pythonMissing: true, missing: [], ocrMissing: true }));
+        child.on('close', (code) => {
+            if (!out && code !== 0) return finish({ pythonMissing: true, missing: [], ocrMissing: true });
+            const miss = ((out.match(/MISS=(.*)/) || [null, ''])[1] || '').split(',').filter(Boolean);
+            finish({ pythonMissing: false, missing: miss, ocrMissing: !/OCR=1/.test(out) });
+        });
+    });
+}
+
+function startPyService() {
+    if (pyProc && !pyProc.killed) return true;
+    const script = pyScript();
+    if (!fs.existsSync(script)) {
+        console.error('[字幕] 找不到 Python 服务:', script);
+        return false;
+    }
+    // 注意：必须 UTF-8（中文 Windows 默认 GBK，会让管道里的中文解码失败）
+    pyProc = spawn('python', [script], {
+        cwd: pyDir(),
+        env: Object.assign({}, process.env, { PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' }),
+        windowsHide: true,
+    });
+    pyProc.stdout.setEncoding('utf-8');
+    pyProc.stdout.on('data', (chunk) => {
+        pyBuf += chunk;
+        let idx;
+        while ((idx = pyBuf.indexOf('\n')) >= 0) {
+            const line = pyBuf.slice(0, idx).trim();
+            pyBuf = pyBuf.slice(idx + 1);
+            if (!line) continue;
+            let obj;
+            try { obj = JSON.parse(line); } catch (e) { continue; }
+            if (subtitleWindow && !subtitleWindow.isDestroyed()) {
+                subtitleWindow.webContents.send('subtitle-event', obj);
+            }
+        }
+    });
+    pyProc.stderr.setEncoding('utf-8');
+    pyProc.stderr.on('data', (d) => console.error('[py]', String(d).trim()));
+    pyProc.on('error', (err) => {
+        console.error('[字幕] 无法启动 Python:', err.message);
+        pyProc = null;
+        if (err.code === 'ENOENT') {
+            dialog.showMessageBox({
+                type: 'warning', title: '找不到 python',
+                message: '未检测到 python 命令，字幕识别无法运行。',
+                detail: '请安装 Python 3.x 并确保勾选 “Add python.exe to PATH”。\n安装包不附带 Python。',
+                buttons: ['知道了'],
+            });
+        }
+    });
+    pyProc.on('exit', (code) => { console.log('[字幕] Python 服务退出', code); pyProc = null; });
+    return true;
+}
+
+function pySend(obj) {
+    if (!startPyService()) return false;
+    try {
+        pyProc.stdin.write(JSON.stringify(obj) + '\n');
+        return true;
+    } catch (e) {
+        console.error('[字幕] 发送失败:', e.message);
+        return false;
+    }
+}
+
+function stopPyService() {
+    if (pyProc) {
+        try { pyProc.stdin.write(JSON.stringify({ cmd: 'exit' }) + '\n'); } catch (e) {}
+    }
+}
+
+// 字幕识别独立窗口（先检查依赖；安装包不含 Python 及依赖库，缺失则弹提示）
+async function openSubtitleWindow() {
+    if (subtitleWindow && !subtitleWindow.isDestroyed()) {
+        subtitleWindow.show();
+        subtitleWindow.focus();
+        return;
+    }
+    const dep = await checkPyDeps();
+    if (dep.pythonMissing) {
+        dialog.showMessageBox({
+            type: 'warning', title: '缺少 Python 环境',
+            message: '字幕识别需要本机安装 Python，但未检测到。',
+            detail: '请安装 Python 3.x，并确保 python 命令可用（安装时勾选 “Add python.exe to PATH”）。\n\n注意：安装包不附带 Python 与相关依赖库。',
+            buttons: ['知道了'],
+        });
+        return;
+    }
+    if (dep.missing.length || dep.ocrMissing) {
+        const need = dep.missing.concat(dep.ocrMissing ? ['paddleocr 或 easyocr'] : []);
+        dialog.showMessageBox({
+            type: 'warning', title: '缺少依赖库',
+            message: '字幕识别缺少必要的 Python 依赖库，无法运行。',
+            detail: '缺失：' + need.join('、') + '\n\n请用 pip 安装（OCR 引擎任选一种）：\n  pip install pillow opencv-python numpy pyperclip paddleocr paddlepaddle\n  # 或\n  pip install pillow opencv-python numpy pyperclip easyocr',
+            buttons: ['知道了'],
+        });
+        return;
+    }
+    subtitleWindow = new BrowserWindow({
+        width: 880,
+        height: 660,
+        title: '屏幕字幕识别 — 看视频自动出文案',
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js'),
+        },
+    });
+    subtitleWindow.loadFile(path.join(__dirname, 'src', 'subtitle.html'));
+    subtitleWindow.on('closed', () => { subtitleWindow = null; });
+}
 
 // 打包后 __dirname 在只读的 app.asar 里（asar 对 OS 是"文件"不是目录，往里面 mkdir 会报 ENOTDIR），
 // 所以数据目录必须放可写的 userData，否则打包版启动即崩
@@ -169,6 +320,10 @@ function createTray() {
         {
             label: '配置 Dify 知识库...',
             click: () => { openConfigWindow(); }
+        },
+        {
+            label: '🎬 屏幕字幕识别...',
+            click: () => { openSubtitleWindow(); }
         },
         { type: 'separator' },
         {
@@ -342,6 +497,16 @@ function setupIPC() {
         return { configured: !!(cfg.datasetId && cfg.apiKey), baseUrl: cfg.baseUrl };
     });
 
+    // 字幕识别（Python 子进程）
+    ipcMain.handle('subtitle-cmd', (event, payload) => pySend(payload || {}));
+    ipcMain.handle('open-subtitle-window', () => { openSubtitleWindow(); return true; });
+    ipcMain.handle('subtitle-alive', () => !!(pyProc && !pyProc.killed));
+    // 把识别出的文案直接写进 Dify 知识库（复用剪切板那套入库逻辑）
+    ipcMain.handle('dify-ingest-text', async (event, payload) => {
+        return await dify.ingestText((payload && payload.text) || '',
+                                     (payload && payload.name) || '屏幕字幕');
+    });
+
     // Dify 配置窗口：读写配置
     ipcMain.handle('get-dify-config', () => {
         const c = dify.loadConfig();
@@ -392,5 +557,5 @@ app.on('activate', () => {
     }
 });
 
-app.on('before-quit', () => { isQuitting = true; });
+app.on('before-quit', () => { isQuitting = true; stopPyService(); });
 

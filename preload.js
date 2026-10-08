@@ -18,6 +18,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getDifyConfig: () => ipcRenderer.invoke('get-dify-config'),
     saveDifyConfig: (cfg) => ipcRenderer.invoke('save-dify-config', cfg),
 
+    // 字幕识别（Python 子进程）
+    subtitleCmd: (payload) => ipcRenderer.invoke('subtitle-cmd', payload),
+    openSubtitleWindow: () => ipcRenderer.invoke('open-subtitle-window'),
+    subtitleAlive: () => ipcRenderer.invoke('subtitle-alive'),
+    ingestText: (payload) => ipcRenderer.invoke('dify-ingest-text', payload),
+    onSubtitleEvent: (cb) => { ipcRenderer.on('subtitle-event', (event, obj) => cb(obj)); },
+
     onClipboardChange: (callback) => {
         ipcRenderer.on('clipboard-change', (event, text) => callback(text));
     }
